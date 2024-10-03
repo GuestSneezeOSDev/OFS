@@ -1,8 +1,8 @@
 # OFS Project
 
-# Minimal OS
+# 1.0 Minimal OS
 The first thing we need is a Cross-Compiler for our operating system set up a Cross-Compiler for `i686-elf`(64 bit)[1](https://wiki.osdev.org/Bare_Bones#Building_a_Cross-Compiler)
-### Minimal OS : Bootstrap
+### 1.1 Minimal OS : Bootstrap
 we will use `NASM`[2](https://www.nasm.us/) as the main compiler for our os create a file called `boot.s`  with the following code
 ```assembly
 .set ALIGN,    1<<0
@@ -40,7 +40,7 @@ now assemble it using the following command
 nasm -f elf32 boot.s -o boot.o
 ```
 Now we have finished configuring our bootloader from scratch now we will work on our kernel
-## Minimal OS : Kernel
+## 1.2 Minimal OS : Kernel
 Write a **basic** kernel in C (not unix-like)
 here is a basic code snippet for linux build process
 ```C
@@ -196,7 +196,7 @@ we can compile it using the following command
 ```
 i686-elf-gcc -T linker.ld -o os.bin -ffreestanding -O2 -nostdlib boot.o kernel.o -lgcc
 ```
-## Minimal OS : Multiboot
+## 1.3 Minimal OS : Multiboot
 Verify that multiboot is installed in your OS
 ```
 if grub-file --is-x86-multiboot os.bin; then
@@ -228,5 +228,195 @@ you can also boot the kernel from QEMU
 ```
 qemu-system-i386 -kernel os.bin
 ```
-## Full OS
-Coming soon
+## 2.0 Building a simple UNIX-like Operating System
+Here is an overview of the directory structure of the source code the code here is based off my own kernel [neutrox](https://github.com/GuestSneezeOSDev/Neutrox-Kernel)
+**IMPORTANT** This is a 32-bit OS not a 64-bit OS
+```
+src/
+    makefile
+    kernel.c
+    kernel_entry.asm
+boot/grub
+    grub.cfg
+build.sh
+```
+## 2.1 Building a simple UNIX-like Operating System : Kernel Development
+create a new Makefile in the kernel directory and in the Makefile paste the following code
+```makefile
+TARGET = ../boot/kernel.bin
+
+ASM_SOURCES = kernel_entry.asm
+C_SOURCES = kernel.c
+
+ASM_OBJECTS = $(ASM_SOURCES:.asm=.o)
+C_OBJECTS = $(C_SOURCES:.c=.o)
+
+CC = gcc
+LD = ld
+ASM = nasm
+CFLAGS = -m32 -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -Wall -Wextra
+LDFLAGS = -m elf_i386 -Ttext 0x1000 --oformat binary
+
+all: $(TARGET)
+
+$(TARGET): $(ASM_OBJECTS) $(C_OBJECTS)
+	$(LD) $(LDFLAGS) -o $(TARGET) $(ASM_OBJECTS) $(C_OBJECTS)
+
+%.o: %.asm
+	$(ASM) -f elf32 $< -o $@
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f *.o $(TARGET)
+
+.PHONY: all clean
+```
+Now create a file called `kernel.c` with the following contents
+```C
+#include <stdint.h>
+#include <stddef.h>
+
+#define KERNEL_STACK_SIZE 8192
+
+extern void load_initramfs(void);
+extern int execve(const char *filename, char *const argv[], char *const envp[]);
+extern void switch_to_user_mode(void);
+extern void panic(const char *message);
+extern void printf(const char *format, ...);
+
+void vga_puts(const char *str) {
+    volatile char *video = (volatile char*)0xB8000;
+    while (*str) {
+        *video++ = *str++;
+        *video++ = 0x07; 
+    }
+}
+
+void kernel_main() {
+    vga_puts("Kernel started...\n");
+
+    load_initramfs();
+
+    const char *argv[] = {"/sbin/init", NULL};
+    const char *envp[] = {"HOME=/", "PATH=/bin:/sbin", NULL};
+
+    int ret = execve("/sbin/init", (char *const *)argv, (char *const *)envp);
+    if (ret < 0) {
+        panic("Failed to exec /sbin/init");
+    }
+
+    while (1) {
+        __asm__ __volatile__("hlt");
+    }
+}
+
+
+void panic(const char *message) {
+    vga_puts("PANIC: ");
+    vga_puts(message);
+    while (1) {
+        __asm__ __volatile__("hlt");
+    }
+}
+
+int execve(const char *filename, char *const argv[], char *const envp[]) {
+    switch_to_user_mode();  
+    return -1; 
+}
+
+void load_initramfs() {
+    vga_puts("Initramfs loaded...\n");
+}
+
+void switch_to_user_mode() {
+    __asm__ __volatile__(
+        "cli;"
+        "mov $0x23, %ax;"
+        "mov %ax, %ds;"
+        "mov %ax, %es;"
+        "mov %ax, %fs;"
+        "mov %ax, %gs;"
+        "mov %esp, %eax;"
+        "pushl $0x23;"  
+        "pushl %eax;"   
+        "pushf;"        
+        "pop %eax;"
+        "or $0x200, %eax;" 
+        "push %eax;"
+        "pushl $0x1B;"  
+        "push $1f;"     
+        "iret;"
+        "1:"  
+    );
+}
+```
+Now in `kernel_entry.asm` paste the following code
+```
+[bits 32]
+[extern kernel_main]
+
+section .text
+global start
+
+start:
+    cli
+    cld
+    mov ax, 0x10       
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    mov esp, 0x90000   
+
+    call kernel_main   
+
+.halt:
+    hlt               
+    jmp .halt         
+```
+
+## 2.2 Building a simple UNIX-like Operating System : Bootloader
+now go back a directory (the directory before src/) create two directories with the following command
+```
+mkdir -p boot/grub
+cd boot/grub
+```
+now create a `grub.cfg`
+```
+menuentry "OS" {
+    multiboot /boot/kernel.bin
+    module /boot/initramfs.cpio.gz
+}
+```
+## 2.3 Building a simple UNIX-like Operating System : Compilimation
+now go back two directories by using `cd .../...` and create a file called `build.sh`
+<br>
+now in the build.sh we need a user-space a popular one is busybox[3](https://busybox.net/) paste the following code in the build.sh file
+```shell
+echo "Installing User-space..."
+cd ~/
+wget https://busybox.net/downloads/busybox-1.36.1.tar.bz2
+tar xjf busybox-1.36.1.tar.bz2
+cd busybox-1.36.1
+mkdir -p ~/rootfs/{bin,sbin,etc,proc,sys}
+cp ~/busybox ~/rootfs/bin/
+cd rootfs/bin && ln -s busybox sh && ln -s busybox init
+echo "Installing Userspace... Completed
+Creating Initial Ramdisk..."
+cd ..
+find . | cpio -o --format=newc | gzip > ../initramfs.cpio.gz
+echo "Creating Initial Ramdisk... Completed"
+cd ..
+cp -r initramfs.cpio.gz ~/boot/
+echo "Compiling Kernel..."
+cd ~/src/
+make -j $(nproc)
+echo "Compiling Kernel... Completed"
+mkdir iso
+mv boot/ src/ iso/
+grub-mkrescue -o os.iso iso/
+```
+now run the build.sh and watch the magic happen
