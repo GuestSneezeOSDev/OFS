@@ -1,4 +1,4 @@
-# OFS Project
+# OSFS Project
 
 # 1.0 Minimal OS
 The first thing we need is a Cross-Compiler for our operating system set up a Cross-Compiler for `i686-elf`(64 bit)[1](https://wiki.osdev.org/Bare_Bones#Building_a_Cross-Compiler)
