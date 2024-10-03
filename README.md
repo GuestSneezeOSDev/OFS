@@ -2,7 +2,7 @@
 
 # 1.0 Minimal OS
 The first thing we need is a Cross-Compiler for our operating system set up a Cross-Compiler for `i686-elf`(64 bit)[1](https://wiki.osdev.org/Bare_Bones#Building_a_Cross-Compiler)
-### 1.1 Minimal OS : Bootstrap
+## 1.1 Minimal OS : Bootstrap
 we will use `NASM`[2](https://www.nasm.us/) as the main compiler for our os create a file called `boot.s`  with the following code
 ```assembly
 .set ALIGN,    1<<0
