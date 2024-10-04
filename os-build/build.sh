@@ -25,9 +25,9 @@ if [[ "${osbuilder}" == "unix"]] then
   echo "Unix-like OS has been compiled"
 
 elif [["${osbuilder}" == "minimal"]] then
-  nasm -f elf32 boot.s -o boot.o
-  i686-elf-gcc -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-  i686-elf-gcc -T linker.ld -o os.bin -ffreestanding -O2 -nostdlib boot.o kernel.o -lgcc
+  nasm -f elf32 minimal/boot.s -o boot.o
+  i686-elf-gcc -c minimal/kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+  i686-elf-gcc -T minimal/linker.ld -o os.bin -ffreestanding -O2 -nostdlib boot.o kernel.o -lgcc
   if grub-file --is-x86-multiboot os.bin; then
     echo "multiboot confirmed"
   else
@@ -35,7 +35,7 @@ elif [["${osbuilder}" == "minimal"]] then
   fi
   mkdir -p iso/boot/grub
   cp os.bin iso/boot/os.bin
-  cp grub.cfg iso/boot/grub/grub.cfg
+  cp minimal/grub.cfg iso/boot/grub/grub.cfg
   grub-mkrescue -o os.iso iso/
   qemu-system-i386 -cdrom os.iso
   echo "MinimalOS Completed"
